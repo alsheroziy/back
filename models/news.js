@@ -1,0 +1,23 @@
+const mongoose = require('mongoose')
+
+const newsSchema = mongoose.Schema({
+    name:{
+        uz: {type: String, required: true},
+        ru: {type: String, required: true}
+    },
+    description:{
+        uz: {type: String, required: true},
+        ru: {type: String, required: true}
+    },
+    image: { type: String, required: true },
+    // Tag va VideoLink qoshildi
+    videoLink: {type: String, default: " "},
+    tags: {type: String},
+    slug: {type: String, required: true},
+    date: {type: Date, default: Date.now()},
+
+    status:{
+        type: Boolean, default: true
+    }
+})
+module.exports = mongoose.model('news',newsSchema)

@@ -1,0 +1,64 @@
+name: Build Image And Push Images to Container registry
+
+on:
+  push:
+    branches:
+      - 'dev'
+env:
+  TAG: ghcr.io/amediatv-uz/anediatv-backend-dev:${{ github.sha }}
+  CONTAINER_NAME: backend
+  REGISTRY: ghcr.io
+jobs:
+  build-image-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
+        with:
+          repository: AmediaTv-uz/config
+          ref: refs/heads/main
+          path: temp-config
+          token: ${{ secrets.ORG_CLONE_TOKEN }}
+      - name: check repo
+        run: cat temp-config/backend/dev.env > .env
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.TAG }}
+          cache-from: type=registry,ref=ghcr.io/amediatv-uz/anediatv-backend-dev:buildcache
+          cache-to: type=registry,ref=ghcr.io/amediatv-uz/anediatv-backend-dev:buildcache,mode=max
+  deploy-to-server:
+    needs: build-image-push
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Pull Image and run
+        uses: appleboy/ssh-action@v0.1.4
+        with:
+          host: 213.171.6.8 # ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          script: |
+            echo  ${{ secrets.GITHUB_TOKEN }} | docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+            docker pull ${{ env.TAG }}
+            docker container stop ${{ env.CONTAINER_NAME }} > /dev/null
+            docker container rm -f ${{ env.CONTAINER_NAME }}  > /dev/null
+            docker run -d -p 3010:5000 --name ${{ env.CONTAINER_NAME }} -v /public:/home/node/app/public --restart=always ${{ env.TAG }}
